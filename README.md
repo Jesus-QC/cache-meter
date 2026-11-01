@@ -1,6 +1,6 @@
 # cache-meter
 
-<img width="1441" height="913" alt="Screenshot 2026-11-01 at 23 45 15" src="https://github.com/user-attachments/assets/3d63986f-a724-4dac-991a-ecb03a84281c" />
+<img width="1441" height="913" alt="Screenshot 2026-11-01 at 23 45 15" src="https://github.com/user-attachments/assets/0465d110-321c-4c46-8f7e-1d45f524a78a" />
 
 A Claude Code mod that adds a **Cache** pane showing whether this conversation's prompt cache is still hot, so you know if your next message reuses it or pays to rebuild it:
 
