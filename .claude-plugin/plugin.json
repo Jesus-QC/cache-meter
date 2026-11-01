@@ -1,0 +1,15 @@
+{
+  "name": "cache-meter",
+  "version": "0.1.0",
+  "description": "A pane showing whether this conversation's prompt cache is hot or cold, and how much of the last turn it served",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "cacheTtl": {
+      "type": "string",
+      "title": "Cache lifetime",
+      "description": "How long the prompt cache lasts: 1h on a Claude subscription, 5m on overage or an API key",
+      "options": ["1h", "5m"],
+      "default": "1h"
+    }
+  }
+}
