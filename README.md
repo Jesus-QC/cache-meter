@@ -12,13 +12,15 @@ The pixel Claude crab shows the temperature: red-orange and dancing with flames 
 
 The countdown restarts at the end of every turn of the main conversation. Subagents have caches of their own and don't count.
 
+It works in conversations you come back to, too: each conversation's last reading is saved, and for one from before the mod was installed it reads the time of the last reply from the conversation's transcript, so `/cache-meter` in a chat you left an hour ago tells you right away whether its cache is still there.
+
 ## Usage
 
-Run `/cache-meter` to open the pane; it also replies with a small crab and how long the cache has left. The pane fills in after the first reply.
+Run `/cache-meter` to open the pane; it also replies with a small crab and how long the cache has left. In a conversation with no replies yet there is nothing cached, and the pane says so.
 
 ## Setting
 
-Claude Code doesn't tell mods how long the cache lasts, so the mod assumes it. **Cache lifetime** is `1h` by default, what Claude Code normally uses on a Claude subscription. Set it to `5m` if you're on overage or an API key. Change it in the plugin's row of the config menu.
+Where the transcript shows which lifetime the last reply's cache was written with (1h or 5m), the mod uses that. Otherwise it goes by the **Cache lifetime** setting: `1h` by default, what Claude Code normally uses on a Claude subscription. Set it to `5m` if you're on overage or an API key. Change it in the plugin's row of the config menu.
 
 ## Install
 

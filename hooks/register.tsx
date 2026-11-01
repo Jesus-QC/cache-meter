@@ -175,7 +175,9 @@ const COOLING = 0.15
 
 type Heat = { mood: Mood; left: number; msLeft: number }
 
-function heatOf(r: CacheReading, ttl: number, at: number): Heat {
+function heatOf(r: CacheReading, setting: number, at: number): Heat {
+  // The lifetime the transcript showed the cache was written with wins over the setting.
+  const ttl = r.ttl ?? setting
   const msLeft = r.broken ? 0 : Math.max(0, r.at + ttl - at)
   const left = msLeft / ttl
   return { mood: msLeft === 0 ? 'tired' : left <= COOLING ? 'worried' : 'happy', left, msLeft }
@@ -220,10 +222,91 @@ async function tick($: EngineInterface) {
   }
 }
 
+// Each conversation's last reading, kept in $.store under its session id, so a resumed
+// conversation or a restart picks it up again.
+async function storeKey($: EngineInterface) {
+  return `reading:${await $.session.id()}`
+}
+
+async function remember($: EngineInterface, r: CacheReading) {
+  await update($, reading, () => r)
+  await $.store.set(await storeKey($), r).catch(() => undefined)
+}
+
+// The session's transcript: ~/.claude/projects/<cwd, every other character a dash>/<id>.jsonl.
+async function transcriptPath($: EngineInterface) {
+  const config = (await $.env.get('CLAUDE_CONFIG_DIR')) || `${await $.env.get('HOME')}/.claude`
+  const cwd = await $.session.cwd()
+  return `${config}/projects/${cwd.replace(/[^a-zA-Z0-9]/g, '-')}/${await $.session.id()}.jsonl`
+}
+
+// The transcript's text, or its last 2 MB where it is over the 4 MiB a read takes.
+async function transcriptTail($: EngineInterface, path: string) {
+  const whole = await $.fs.read(path).catch(() => undefined)
+  if (typeof whole === 'string') return whole
+  const tail = await $.process.run(['tail', '-c', '2000000', path]).catch(() => undefined)
+  return tail?.exitCode === 0 ? tail.stdout : undefined
+}
+
+// A conversation from before the mod saw it: its last main-thread reply's time and cache
+// figures, from the transcript, and whether a compaction came after it.
+async function readingFromTranscript($: EngineInterface): Promise<CacheReading | null> {
+  const text = await transcriptTail($, await transcriptPath($)).catch(() => undefined)
+  if (!text) return null
+  let isCompactedSince = false
+  const lines = text.split('\n')
+  for (let i = lines.length - 1; i >= 0; i--) {
+    let entry: {
+      type?: string
+      subtype?: string
+      isSidechain?: boolean
+      timestamp?: string
+      message?: {
+        model?: string
+        usage?: Record<string, number | undefined> & {
+          cache_creation?: { ephemeral_1h_input_tokens?: number; ephemeral_5m_input_tokens?: number }
+        }
+      }
+    }
+    try {
+      entry = JSON.parse(lines[i] ?? '')
+    } catch {
+      continue
+    }
+    if (entry.type === 'system' && entry.subtype === 'compact_boundary') isCompactedSince = true
+    if (entry.type !== 'assistant' || entry.isSidechain || !entry.timestamp) continue
+    const at = Date.parse(entry.timestamp)
+    if (!Number.isFinite(at)) continue
+    const usage = entry.message?.usage ?? {}
+    const written = usage.cache_creation
+    const lifetime =
+      (written?.ephemeral_1h_input_tokens ?? 0) > 0 ? 60 * MINUTE : (written?.ephemeral_5m_input_tokens ?? 0) > 0 ? 5 * MINUTE : undefined
+    return {
+      at,
+      read: usage.cache_read_input_tokens ?? 0,
+      write: usage.cache_creation_input_tokens ?? 0,
+      input: usage.input_tokens ?? 0,
+      model: entry.message?.model,
+      ...(lifetime ? { ttl: lifetime } : {}),
+      ...(isCompactedSince ? { broken: 'conversation compacted' } : {}),
+    }
+  }
+  return null
+}
+
+// What this conversation's cache was left at: the reading saved for it, else its transcript.
+async function seed($: EngineInterface) {
+  if (await read($, reading)) return
+  const saved = (await $.store.get(await storeKey($)).catch(() => undefined)) as CacheReading | undefined
+  const r = saved && typeof saved.at === 'number' ? saved : await readingFromTranscript($)
+  if (r) await update($, reading, () => r)
+}
+
 async function openPane($: EngineInterface) {
+  await seed($).catch(() => undefined)
   await $.ui.open({ id: PANE, title: TITLE })
   const r = await read($, reading)
-  if (!r) return { text: 'Cache pane opened. It fills in after the first reply.' }
+  if (!r) return { text: 'Cache pane opened. No reply in this conversation yet.' }
   const heat = heatOf(r, ttl, await $.clock.now())
   // The row's text is the mood line, then when it goes cold; the CommandOutput hook draws the crab beside it.
   return { text: `${MOOD_LINE[heat.mood]} · ${whenLine(r, heat)}` }
@@ -236,6 +319,7 @@ export const register: Register = (on, options) => {
     await $.command
       .register({ name: 'cache-meter', description: 'Show whether the prompt cache is hot or cold in a pane' })
       .catch(() => undefined)
+    await seed($).catch(() => undefined)
     await tick($)
     $.clock.every(MINUTE, () => void tick($).catch(() => undefined))
 
@@ -251,13 +335,15 @@ export const register: Register = (on, options) => {
     if (e.agentId === undefined && usage) {
       // A fresh request restarts the lifetime; a model switch or missed cache shows in the read share.
       const at = await $.clock.now()
-      await update($, reading, () => ({
+      const prev = await read($, reading)
+      await remember($, {
+        ...(prev?.ttl ? { ttl: prev.ttl } : {}),
         at,
         read: usage.cache_read_input_tokens,
         write: usage.cache_creation_input_tokens,
         input: usage.input_tokens,
         model: usage.model,
-      }))
+      })
       await tick($)
     }
 
@@ -268,7 +354,8 @@ export const register: Register = (on, options) => {
   on('session.compact', async ($, e, next) => {
     const done = await next(e)
     if ('skip' in done && done.skip) return done
-    await update($, reading, r => (r ? { ...r, broken: 'conversation compacted' } : r))
+    const r = await read($, reading)
+    if (r) await remember($, { ...r, broken: 'conversation compacted' })
     await tick($)
 
     return done
@@ -305,8 +392,8 @@ export const register: Register = (on, options) => {
     if (!r) {
       return (
         <Box flexDirection="column" padding={1}>
-          <Text dimColor>No cache reading yet.</Text>
-          <Text dimColor>It fills in after the first reply.</Text>
+          <Text dimColor>No reply in this conversation yet,</Text>
+          <Text dimColor>so there is no cache to keep warm.</Text>
         </Box>
       )
     }
@@ -324,7 +411,7 @@ export const register: Register = (on, options) => {
           <Text bold color={heat.mood === 'happy' ? undefined : 'warning'}>
             {heat.msLeft > 0 ? (heat.mood === 'happy' ? 'Hot' : 'Cooling') : 'Cold'}
           </Text>
-          <Text dimColor>· {ttl === 5 * MINUTE ? '5m' : '1h'} lifetime</Text>
+          <Text dimColor>· {(r.ttl ?? ttl) === 5 * MINUTE ? '5m' : '1h'} lifetime</Text>
         </Box>
         {'Svg' in ui ? (
           <ui.Svg

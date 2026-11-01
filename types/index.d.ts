@@ -1,4 +1,4 @@
-// The main conversation's last request: when it ended, its cache figures, and what broke the cache since.
+// The main conversation's last request: when it ended, its cache figures, what broke the cache since, and its lifetime.
 export type CacheReading = {
   at: number
   read: number
@@ -6,6 +6,8 @@ export type CacheReading = {
   input: number
   model?: string
   broken?: string
+  // The lifetime the transcript showed the cache was written with, in ms; the setting where unknown.
+  ttl?: number
 }
 
 declare module 'claude-code' {
