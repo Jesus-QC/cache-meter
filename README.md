@@ -6,7 +6,6 @@ A Claude Code mod that adds a **Cache** pane showing whether this conversation's
 
 - **Hot**, **Cooling** or **Cold**, with a bar of how much of the cache's lifetime is left
 - a countdown to when it goes cold ("cold in 42m")
-- a status line entry (`cache hot · 42m`) that ticks every minute
 - one notification per turn when the cache starts cooling, so you can send something before it expires
 - after `/compact`, it shows the cache as cold, since the next request rebuilds it
 

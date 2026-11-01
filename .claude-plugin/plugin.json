@@ -1,6 +1,6 @@
 {
   "name": "cache-meter",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A pane showing whether this conversation's prompt cache is hot or cold, and how much of the last turn it served",
   "types": "./types/index.d.ts",
   "userConfig": {

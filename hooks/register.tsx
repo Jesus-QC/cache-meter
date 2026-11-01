@@ -215,7 +215,6 @@ async function tick($: EngineInterface) {
   const r = await read($, reading)
   if (!r) return
   const heat = heatOf(r, ttl, at)
-  await $.ui.status(heat.msLeft > 0 ? `cache ${heat.mood === 'happy' ? 'hot' : 'cooling'} · ${minutes(heat.msLeft)}` : 'cache cold')
   if (heat.mood === 'worried' && warnedFor !== r.at) {
     warnedFor = r.at
     await $.ui.toast(`Prompt cache goes cold in ${minutes(heat.msLeft)}`)
