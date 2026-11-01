@@ -1,5 +1,7 @@
 # cache-meter
 
+<img width="1441" height="913" alt="Screenshot 2026-11-01 at 23 45 15" src="https://github.com/user-attachments/assets/1be8dd9f-f635-4dd6-924c-e04cc7ac3be5" />
+
 A Claude Code mod that adds a **Cache** pane showing whether this conversation's prompt cache is still hot, so you know if your next message reuses it or pays to rebuild it:
 
 - **Hot**, **Cooling** or **Cold**, with a bar of how much of the cache's lifetime is left
